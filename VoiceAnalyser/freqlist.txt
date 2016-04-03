@@ -1,0 +1,13 @@
+Male:
+
+Ohh: 230
+Hello: 290
+Please: 87
+Yes: 141
+Boom: 196.0
+Yeah: 133
+No: 398
+
+Female:
+
+Hi: 555
