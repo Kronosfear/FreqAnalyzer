@@ -11,7 +11,9 @@ import wave
 import struct
 import scipy.fftpack
 import math
+import glob
 import pyaudio
+import os
 
 
 CHUNK = 1024
@@ -134,7 +136,9 @@ def cepstral(spf):
     
 Fs = 11025;  # sampling rate
 
-filename = 'male/no.wav'
-my_fft(filename)
-cepstral(filename)
-TimeAmpSpectrum(filename)
+
+for filename in glob.glob('male\*.wav'):
+    print ("For file: ", os.path.splitext(os.path.basename(path))[0]) 
+    my_fft(filename)
+    cepstral(filename)
+    
