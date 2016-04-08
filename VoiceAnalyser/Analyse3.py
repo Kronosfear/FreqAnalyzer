@@ -1,9 +1,10 @@
 from pylab import plot, show, title, xlabel, ylabel, subplot, savefig
 from scipy import fft, arange, ifft
-from scipy.signal import blackmanharris, fftconvolve, kaiser
+from scipy.signal import blackmanharris, fftconvolve, kaiser, hamming
 from numpy import sin, linspace, pi, diff, log, argmax
-from numpy.fft import rfft
+from numpy.fft import rfft, irfft
 from matplotlib.mlab import find
+from array import array
 import numpy
 from scipy.io.wavfile import read,write
 import wave
@@ -55,11 +56,20 @@ def TimeAmpSpectrum(filename):
     subplot(2,1,2)
     FFTSpectrum(y,Fs)
     show()
+    
+def normalize(snd_data):
+    MAXIMUM = 16384
+    times = float(MAXIMUM)/max(abs(i) for i in snd_data)
+    
+    r = array('h')
+    for i in snd_data:
+        r.append(int(i*times))
+    return r
 
 
 
 
-def fft_cepstral(filename):
+def my_fft(filename):
     wave_file = wave.open(filename, 'r')
     nframes = wave_file.getnframes()
     nchannels = wave_file.getnchannels()
@@ -69,33 +79,62 @@ def fft_cepstral(filename):
     wave_file.close()
     datas = struct.unpack("%dh" %  nchannels*nframes, read_frames)
     datas = numpy.array(datas)
-    w = numpy.fft.fft(datas)
-    
-    ceps=ifft(w);
-    posmax = ceps.argmax();
-    result = Fs/(32*nframes*nchannels)*(posmax-1) 
-    print("Cepstral: ", result)
+    datas = normalize(datas)
+    w = numpy.fft.rfft(datas)
     
     freqs = numpy.fft.fftfreq(len(w))
     idx = numpy.argmax(numpy.abs(w))
     freq = freqs[idx]
-    freq_in_hertz = abs(freq * Fs)
+    freq_in_hertz = abs(freq * sampling_frequency)/2
     print("FFT: ", freq_in_hertz)
 
 
 def zerocross(filename):
     sig=read(filename)
-    y= numpy.array(sig)
     indices = find((sig[1:] >= 0) & (sig[:-1] < 0))
     crossings = [i - sig[i] / (sig[i+1] - sig[i]) for i in indices]
     Frequency =  fs / mean(diff(crossings))
     print ("Zero Crossing:  ",Frequency)
+    
+def cepstral(spf):
+    index1=15000;
+    frameSize=4096;
+    spf = wave.open(filename, 'r')
+    fs = spf.getframerate();
+    signal = spf.readframes(-1);
+    signal = numpy.fromstring(signal, 'Int16');
+    index2=index1+frameSize-1;
+    frames=signal[index1:int(index2)+1]
+    
+    zeroPaddedFrameSize=16*frameSize;
+
+    frames2=frames*hamming(len(frames));   
+    frameSize=len(frames);
+    
+    if (zeroPaddedFrameSize>frameSize):
+        zrs= numpy.zeros(zeroPaddedFrameSize-frameSize);
+        frames2=numpy.concatenate((frames2, zrs), axis=0)
+
+    fftResult=numpy.log(numpy.abs(fft(frames2)));
+    ceps=ifft(fftResult);
+    nceps=ceps.shape[-1]*2/3
+    peaks = []
+    k=3
+    while(k < nceps - 1):
+        y1 = (ceps[k - 1])
+        y2 = (ceps[k])
+        y3 = (ceps[k + 1])
+        if (y2 > y1 and y2 >= y3): peaks.append([float(fs)/(k+2),abs(y2), k, nceps])
+        k=k+1
+    maxi=max(peaks, key = lambda x: x[1])
+    print("Cepstral: ", fs/maxi[0])
+    
 
     
     
 Fs = 11025;  # sampling rate
 
-filename = 'male/demo.wav'
-fft_cepstral(filename)
-
+filename = 'male/no.wav'
+my_fft(filename)
+cepstral(filename)
 TimeAmpSpectrum(filename)
