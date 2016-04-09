@@ -12,6 +12,7 @@ import struct
 import scipy.fftpack
 import math
 import glob
+import audioop
 import pyaudio
 from os.path import basename
 from features import mfcc, mel2hz
@@ -94,44 +95,45 @@ def my_fft(filename):
     datas = struct.unpack("%dh" %  nchannels*nframes, read_frames)
     datas = numpy.array(datas)
     datas = normalize(datas)
-    w = numpy.fft.rfft(datas)
+    w = numpy.fft.fft(datas)
     
     freqs = numpy.fft.fftfreq(len(w))
     idx = numpy.argmax(numpy.abs(w))
     freq = freqs[idx]
-    freq_in_hertz = float("{0:.2f}".format(abs(freq * sampling_frequency)/2))
+    freq_in_hertz = float("{0:.2f}".format(abs(freq * sampling_frequency)))
     print("FFT: ", freq_in_hertz)
 
 
 def zerocross(filename):
     sig=read(filename, 'r')
-    spf = wave.open(filename,'r');
-    fs = spf.getframerate();
-    indices = find((x >= 0 for x in sig[1:]) and (y < 0 for y in sig[:-1]))
-    crossings = [i - sig[i] / (sig[i+1] - sig[i]) for i in indices] 
-    Frequency =  fs / numpy.average(diff(crossings))
-    print ("Zero Crossing:  ",Frequency)
+    wave_file = wave.open(filename, 'r')
+    nframes = wave_file.getnframes()
+    nchannels = wave_file.getnchannels()
+    sampling_frequency = wave_file.getframerate()
+    T = nframes / float(sampling_frequency)
+    read_frames = wave_file.readframes(nframes)
+    wave_file.close()
+    Frequency = audioop.cross(read_frames,1)   
+    print ("Zero Crossing:  ", float("{0:.2f}".format(numpy.sqrt(Frequency*2))))
     
 def cepstral(filename):
     index1=15000;
     frameSize=1;
-    spf = wave.open(filename,'r');
-    fs = spf.getframerate();
-    signal = spf.readframes(-1);
-    signal = numpy.fromstring(signal, 'Int16');
-    index2=index1+frameSize-1;
-    frames=signal[index1:int(index2)+1]
-    zeroPaddedFrameSize=16*frameSize;    
-    frames2=frames*hamming(len(frames));   
-    frameSize=len(frames);    
-    if (zeroPaddedFrameSize>frameSize):
-        zrs= numpy.zeros(zeroPaddedFrameSize-frameSize);
-        frames2=numpy.concatenate((frames2, zrs), axis=0)    
-    fftResult=numpy.log(abs(fft(frames2)));
+    wave_file = wave.open(filename, 'r')
+    nframes = wave_file.getnframes()
+    nchannels = wave_file.getnchannels()
+    sampling_frequency = wave_file.getframerate()
+    T = nframes / float(sampling_frequency)
+    read_frames = wave_file.readframes(nframes)
+    wave_file.close()
+    datas = struct.unpack("%dh" %  nchannels*nframes, read_frames)
+    datas = numpy.array(datas)
+    datas = normalize(datas)
+    fftResult=numpy.log(fft(datas));
     ceps=ifft(fftResult);    
-    posmax = ceps.argmax();   
-    result = fs/zeroPaddedFrameSize*(posmax-1)   
-    print ("Cepstral: ", result)
+    posmax = ceps.max()   
+    result = abs(11025/440*(posmax-1))   
+    print ("Cepstral: ", float("{0:.2f}".format(result)))
     
 
 def autocorr(filename):
@@ -150,7 +152,7 @@ def autocorr(filename):
     start = find(d > 0)[0]
     peak = argmax(corr[start:]) + start
     px, py = parabolic(corr, peak)
-    print("Zero Crossing: ", 11025 / px)    
+    print("Autocorrelation: ", float("{0:.2f}".format(numpy.sqrt(sampling_frequency/px * 2))))    
     
 def melfreq(filename):
     (rate,sig) = wav.read(filename)
@@ -158,17 +160,18 @@ def melfreq(filename):
     fbank_feat = logfbank(sig,rate)
     dc = scipy.fftpack.dct(fbank_feat)
     mx = numpy.amax(dc, axis = 0)
-    print("MFCC: ", 4096/numpy.mean(mx)*2)
+    print("MFCC: ", float("{0:.2f}".format(4096/numpy.mean(mx)*2)))
         
 
 
 Fs = 11025;  # sampling rate
 
 
-for filename in glob.glob('female\*.wav'):
+for filename in glob.glob('male\*.wav'):
     print (basename(filename))
     my_fft(filename)
     cepstral(filename)
+    zerocross(filename)
     autocorr(filename)
     melfreq(filename)
     print("---------------------------")
