@@ -13,7 +13,11 @@ import scipy.fftpack
 import math
 import glob
 import pyaudio
-import os
+from os.path import basename
+from features import mfcc, mel2hz
+from features import logfbank
+import scipy.io.wavfile as wav
+
 
 
 CHUNK = 1024
@@ -29,6 +33,14 @@ stream = p.open(format=FORMAT,
                 rate=RATE,
                 input=True,
                 frames_per_buffer=CHUNK)
+
+
+
+def parabolic(f, x):
+    xv = 1/2 * (f[x-1] - f[x+1]) / (f[x-1] - 2 * f[x] + f[x+1]) + x
+    yv = f[x] - 1/4 * (f[x-1] - f[x+1]) * (xv - x)
+    return (xv, yv)
+
 
 
 
@@ -87,58 +99,77 @@ def my_fft(filename):
     freqs = numpy.fft.fftfreq(len(w))
     idx = numpy.argmax(numpy.abs(w))
     freq = freqs[idx]
-    freq_in_hertz = abs(freq * sampling_frequency)/2
+    freq_in_hertz = float("{0:.2f}".format(abs(freq * sampling_frequency)/2))
     print("FFT: ", freq_in_hertz)
 
 
 def zerocross(filename):
-    sig=read(filename)
-    indices = find((sig[1:] >= 0) & (sig[:-1] < 0))
-    crossings = [i - sig[i] / (sig[i+1] - sig[i]) for i in indices]
-    Frequency =  fs / mean(diff(crossings))
+    sig=read(filename, 'r')
+    spf = wave.open(filename,'r');
+    fs = spf.getframerate();
+    indices = find((x >= 0 for x in sig[1:]) and (y < 0 for y in sig[:-1]))
+    crossings = [i - sig[i] / (sig[i+1] - sig[i]) for i in indices] 
+    Frequency =  fs / numpy.average(diff(crossings))
     print ("Zero Crossing:  ",Frequency)
     
-def cepstral(spf):
+def cepstral(filename):
     index1=15000;
-    frameSize=4096;
-    spf = wave.open(filename, 'r')
+    frameSize=1;
+    spf = wave.open(filename,'r');
     fs = spf.getframerate();
     signal = spf.readframes(-1);
     signal = numpy.fromstring(signal, 'Int16');
     index2=index1+frameSize-1;
     frames=signal[index1:int(index2)+1]
-    
-    zeroPaddedFrameSize=16*frameSize;
-
+    zeroPaddedFrameSize=16*frameSize;    
     frames2=frames*hamming(len(frames));   
-    frameSize=len(frames);
-    
+    frameSize=len(frames);    
     if (zeroPaddedFrameSize>frameSize):
         zrs= numpy.zeros(zeroPaddedFrameSize-frameSize);
-        frames2=numpy.concatenate((frames2, zrs), axis=0)
-
-    fftResult=numpy.log(numpy.abs(fft(frames2)));
-    ceps=ifft(fftResult);
-    nceps=ceps.shape[-1]*2/3
-    peaks = []
-    k=3
-    while(k < nceps - 1):
-        y1 = (ceps[k - 1])
-        y2 = (ceps[k])
-        y3 = (ceps[k + 1])
-        if (y2 > y1 and y2 >= y3): peaks.append([float(fs)/(k+2),abs(y2), k, nceps])
-        k=k+1
-    maxi=max(peaks, key = lambda x: x[1])
-    print("Cepstral: ", fs/maxi[0])
+        frames2=numpy.concatenate((frames2, zrs), axis=0)    
+    fftResult=numpy.log(abs(fft(frames2)));
+    ceps=ifft(fftResult);    
+    posmax = ceps.argmax();   
+    result = fs/zeroPaddedFrameSize*(posmax-1)   
+    print ("Cepstral: ", result)
     
 
+def autocorr(filename):
+    wave_file = wave.open(filename, 'r')
+    nframes = wave_file.getnframes()
+    nchannels = wave_file.getnchannels()
+    sampling_frequency = wave_file.getframerate()
+    T = nframes / float(sampling_frequency)
+    read_frames = wave_file.readframes(nframes)
+    wave_file.close()
+    sig = struct.unpack("%dh" %  nchannels*nframes, read_frames)
+    sig = numpy.array(sig)
+    corr = fftconvolve(sig, sig[::-1], mode='full')
+    corr = corr[len(corr)/2:]
+    d = diff(corr)
+    start = find(d > 0)[0]
+    peak = argmax(corr[start:]) + start
+    px, py = parabolic(corr, peak)
+    print("Zero Crossing: ", 11025 / px)    
     
-    
+def melfreq(filename):
+    (rate,sig) = wav.read(filename)
+    mfcc_feat = mfcc(sig,rate)
+    fbank_feat = logfbank(sig,rate)
+    dc = scipy.fftpack.dct(fbank_feat)
+    mx = numpy.amax(dc, axis = 0)
+    print("MFCC: ", 4096/numpy.mean(mx)*2)
+        
+
+
 Fs = 11025;  # sampling rate
 
 
-for filename in glob.glob('male\*.wav'):
-    print ("For file: ", os.path.splitext(os.path.basename(path))[0]) 
+for filename in glob.glob('female\*.wav'):
+    print (basename(filename))
     my_fft(filename)
     cepstral(filename)
+    autocorr(filename)
+    melfreq(filename)
+    print("---------------------------")
     
