@@ -95,13 +95,12 @@ def my_fft(filename):
     datas = struct.unpack("%dh" %  nchannels*nframes, read_frames)
     datas = numpy.array(datas)
     datas = normalize(datas)
-    w = numpy.fft.fft(datas)
-    
-    freqs = numpy.fft.fftfreq(len(w))
+    w = numpy.fft.rfft(datas)   
+    freqs = numpy.fft.rfftfreq(len(w))
     idx = numpy.argmax(numpy.abs(w))
     freq = freqs[idx]
-    freq_in_hertz = float("{0:.2f}".format(abs(freq * sampling_frequency)))
-    print("FFT: ", freq_in_hertz)
+    freq_in_hertz = float("{0:.2f}".format(abs(freq * 11025)))
+    print(freq_in_hertz)
 
 
 def zerocross(filename):
@@ -113,8 +112,8 @@ def zerocross(filename):
     T = nframes / float(sampling_frequency)
     read_frames = wave_file.readframes(nframes)
     wave_file.close()
-    Frequency = audioop.cross(read_frames,1)   
-    print ("Zero Crossing:  ", float("{0:.2f}".format(numpy.sqrt(Frequency*2))))
+    Frequency = audioop.cross(read_frames,3)   
+    print (float("{0:.2f}".format(numpy.sqrt(Frequency))))
     
 def cepstral(filename):
     index1=15000;
@@ -133,7 +132,7 @@ def cepstral(filename):
     ceps=ifft(fftResult);    
     posmax = ceps.max()   
     result = abs(11025/440*(posmax-1))   
-    print ("Cepstral: ", float("{0:.2f}".format(result)))
+    print (float("{0:.2f}".format(result)))
     
 
 def autocorr(filename):
@@ -152,7 +151,7 @@ def autocorr(filename):
     start = find(d > 0)[0]
     peak = argmax(corr[start:]) + start
     px, py = parabolic(corr, peak)
-    print("Autocorrelation: ", float("{0:.2f}".format(numpy.sqrt(sampling_frequency/px * 2))))    
+    print(float("{0:.2f}".format(numpy.sqrt(sampling_frequency/px*64))))
     
 def melfreq(filename):
     (rate,sig) = wav.read(filename)
@@ -160,18 +159,17 @@ def melfreq(filename):
     fbank_feat = logfbank(sig,rate)
     dc = scipy.fftpack.dct(fbank_feat)
     mx = numpy.amax(dc, axis = 0)
-    print("MFCC: ", float("{0:.2f}".format(4096/numpy.mean(mx)*2)))
+    print(float("{0:.2f}".format(4096/numpy.mean(mx)*2)))
         
 
 
 Fs = 11025;  # sampling rate
 
 
-for filename in glob.glob('male\*.wav'):
+for filename in glob.glob('female\Madeline\*.wav'):
     print (basename(filename))
     my_fft(filename)
     cepstral(filename)
-    zerocross(filename)
     autocorr(filename)
     melfreq(filename)
     print("---------------------------")
